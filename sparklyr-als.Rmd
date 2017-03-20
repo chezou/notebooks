@@ -1,0 +1,69 @@
+---
+title: "sparklyr ALS simple examples"
+author: "Aki Ariga"
+date: "3/20/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Prepare data
+
+First prepare data frame on Spark.
+
+```{r data_preparation}
+devtools::install_github("chezou/sparklyr", ref = "implicit-als")
+library(sparklyr)
+library(dplyr)
+sc <- spark_connect(master = "local")
+
+user = c(0, 0, 1, 1, 2, 2)
+item = c(0, 1, 1, 2, 1, 2)
+rating = c(4.0, 2.0, 3.0, 4.0, 1.0, 5.0)
+
+df <- data.frame(user = user, item = item, rating = rating)
+
+movie_ratings <- sdf_copy_to(sc, df, "movie_rating", overwrite = TRUE)
+movie_ratings
+```
+
+Then, create an explicit model with ALS.
+
+```{r explicit model taringing}
+explicit_model <- ml_als_factorization(movie_ratings, iter.max = 5, regularization.parameter = 0.01)
+summary(explicit_model)
+
+predictions <- explicit_model$.model %>%
+  invoke("transform", spark_dataframe(movie_ratings)) %>%
+  collect()
+
+predictions
+```
+
+Of course, you can train with implicit model.
+
+```{r implicit model taringing}
+implicit_model <- ml_als_factorization(movie_ratings, iter.max = 5, regularization.parameter = 0.01, implicit.preferences = TRUE, alpha = 1.0)
+summary(implicit_model)
+
+implicit_predictions <- implicit_model$.model %>%
+  invoke("transform", spark_dataframe(movie_ratings)) %>%
+  collect()
+
+implicit_predictions
+```
+If you want non-negative least square, you can add the option.
+
+```{r nonnegative model taringing}
+nn_model <- ml_als_factorization(movie_ratings, iter.max = 5, regularization.parameter = 0.01, nonnegative = TRUE)
+summary(nn_model)
+
+nn_predictions <- nn_model$.model %>%
+  invoke("transform", spark_dataframe(movie_ratings)) %>%
+  collect()
+
+nn_predictions
+```
